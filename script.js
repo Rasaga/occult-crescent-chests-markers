@@ -68,6 +68,16 @@ const treasureData = [
 // Cargar progreso guardado de cofres
 const saved = JSON.parse(localStorage.getItem('treasures')) || {};
 
+function updateChestCounter() {
+  const chestCounter = document.getElementById('chest-counter');
+  if (!chestCounter) return;
+
+  const total = treasureData.length;
+  const found = Object.values(saved).filter(Boolean).length;
+
+  chestCounter.textContent = `${found} / ${total} chests found`;
+}
+
 // ==========================
 // ELEMENTOS DEL DOM
 // ==========================
@@ -150,9 +160,8 @@ function toggleTreasure(img) {
     : 'assets/BronzeChest.png';
 
   saved[img.dataset.id] = isDone;
-  localStorage.setItem('treasures', JSON.stringify(saved));
   updateChestCounter();
-
+  localStorage.setItem('treasures', JSON.stringify(saved));
 }
 
 // Crear todos los cofres después de que el mapa cargue
@@ -340,18 +349,4 @@ mapImg.addEventListener('load', () => {
       ? 'Mark all as visited'
       : 'Mark all as not visited';
   });
-
-
-  const chestCounter = document.getElementById('chest-counter');
-
-  function updateChestCounter() {
-  const chestCounter = document.getElementById('chest-counter');
-  if (!chestCounter) return;
-
-  const total = treasureData.length;
-  const found = Object.values(saved).filter(Boolean).length;
-
-  chestCounter.textContent = `${found} / ${total} chests found`;
-  }
-
 });
