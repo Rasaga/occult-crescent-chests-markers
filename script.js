@@ -42,33 +42,61 @@ const silverChestsData = [
   { id: 's7', x: 31.5, y: 25.6 }, { id: 's8', x: 36.0, y: 18.0 },
 ];
 
-const chestTypes = {
-  bronze: {
-    data: bronzeChestsData,
-    icon: 'assets/BronzeChest.png',
-    iconDone: 'assets/ChestDone.png'
+const silverChestsDataTest = [
+  { id: 'st1', x: 1.0, y: 0.0 }, { id: 'st2', x: 2.0, y: 2.0 },
+];
+
+const bronzeChestsDataTest = [
+  { id: 'bt1', x: 5.0, y: 5.0 }, { id: 'bt2', x: 7.0, y: 7.0 },
+];
+
+const maps = {
+  southHorn: {
+    name: "South Horn",
+    image: "assets/sh-map.png",
+    chestTypes: {
+      bronze: {
+        data: bronzeChestsData,
+        icon: 'assets/BronzeChest.png',
+        iconDone: 'assets/ChestDone.png'
+      },
+      silver: {
+        data: silverChestsData,
+        icon: 'assets/SilverChest.png',
+        iconDone: 'assets/ChestDone.png'
+      }
+    }
   },
-  silver: {
-    data: silverChestsData,
-    icon: 'assets/SilverChest.png',
-    iconDone: 'assets/ChestDone.png'
+
+  test: {
+    name: "Test",
+    image: "assets/test-map.png",
+    chestTypes: {
+      bronze: {
+        data: bronzeChestsDataTest,
+        icon: 'assets/BronzeChest.png',
+        iconDone: 'assets/ChestDone.png'
+      },
+      silver: {
+        data: silverChestsDataTest,
+        icon: 'assets/SilverChest.png',
+        iconDone: 'assets/ChestDone.png'
+      }
+    }
   }
 };
 
-let saved = JSON.parse(localStorage.getItem('treasures')) || {
-  bronze: {},
-  silver: {}
-};
+// Mapa activo por defecto
+let currentMapId = "southHorn";
 
-// MIGRACIÓN AUTOMÁTICA
-if (!saved.bronze || !saved.silver) {
-  saved = {
-    bronze: saved.bronze || {},
-    silver: saved.silver || {}
-  };
-  localStorage.setItem('treasures', JSON.stringify(saved));
+let chestTypes = maps[currentMapId].chestTypes;
+
+
+let saved = JSON.parse(localStorage.getItem('treasures')) || {};
+
+if (!saved[currentMapId]) {
+  saved[currentMapId] = { bronze: {}, silver: {} };
 }
-
 
 // ==========================
 // ELEMENTOS DEL DOM
@@ -113,12 +141,29 @@ const updateChestCounter = () => {
   let total = 0;
   let found = 0;
   Object.keys(chestTypes).forEach(type => {
-    total += chestTypes[type].data.length;
-    found += Object.values(saved[type]).filter(Boolean).length;
-  });
+    const typeData = chestTypes[type].data;
+    const typeSaved = saved[currentMapId][type] || {};
 
+    total += typeData.length;
+    found += Object.values(typeSaved).filter(Boolean).length;
+  });
   counter.textContent = `${found} / ${total} chests found`;
 };
+
+// Mostrar coordenadas del ratón
+mapContainer.addEventListener('mousemove', e => {
+  if (isDragging) return;
+
+  const rect = mapImg.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * maxCoord;
+  const y = ((e.clientY - rect.top) / rect.height) * maxCoord;
+
+  coordDisplay.textContent = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}`;
+});
+
+mapContainer.addEventListener('mouseleave', () => {
+  coordDisplay.textContent = '';
+});
 
 // ==========================
 // MAPA
@@ -150,9 +195,9 @@ function createTreasure(type, { x, y, id }) {
   img.dataset.id = id;
   img.dataset.type = type;
 
-  const isDone = saved[type][id];
-
+  const isDone = saved[currentMapId][type][id];
   img.src = isDone ? chestTypes[type].iconDone : chestTypes[type].icon;
+
   if (isDone) img.classList.add('done');
 
   img.addEventListener('click', () => toggleTreasure(img));
@@ -172,7 +217,7 @@ function toggleTreasure(img) {
     ? chestTypes[type].iconDone
     : chestTypes[type].icon;
 
-  saved[type][id] = isDone;
+  saved[currentMapId][type][id] = isDone;
   localStorage.setItem('treasures', JSON.stringify(saved));
   updateChestCounter();
 }
@@ -183,25 +228,13 @@ function toggleTreasure(img) {
 function initMap() {
   mapImg.draggable = false;
 
+  const chestTypes = maps[currentMapId].chestTypes;
+
   Object.keys(chestTypes).forEach(type => {
     chestTypes[type].data.forEach(chest => createTreasure(type, chest));
   });
 
   updateChestCounter();
-
-  mapContainer.addEventListener('mousemove', e => {
-    if (isDragging) return;
-
-    const rect = mapImg.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * maxCoord;
-    const y = ((e.clientY - rect.top) / rect.height) * maxCoord;
-
-    coordDisplay.textContent = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}`;
-  });
-
-  mapContainer.addEventListener('mouseleave', () => {
-    coordDisplay.textContent = '';
-  });
 }
 
 mapImg.complete ? initMap() : mapImg.addEventListener('load', initMap);
@@ -378,7 +411,7 @@ function setupButtons() {
         ? chestTypes[type].iconDone
         : chestTypes[type].icon;
 
-      saved[type][id] = done;
+      saved[currentMapId][type][id] = done;
     });
 
     localStorage.setItem('treasures', JSON.stringify(saved));
@@ -391,4 +424,33 @@ function setupButtons() {
 
 }
 
+function loadMap(mapId) {
+  currentMapId = mapId;
+  chestTypes = maps[currentMapId].chestTypes;
 
+  // Asegurar estructura de guardado
+  if (!saved[currentMapId]) {
+    saved[currentMapId] = { bronze: {}, silver: {} };
+  }
+
+  // Resetear zoom y pan
+  scale = 1;
+  panX = 0;
+  panY = 0;
+  updateTransform();
+
+  // Cambiar imagen del mapa
+  mapImg.src = maps[currentMapId].image;
+
+  // Limpiar cofres anteriores
+  document.querySelectorAll('.treasure-wrapper').forEach(e => e.remove());
+
+  // Cargar cofres nuevos
+  initMap();
+}
+
+document.querySelectorAll('#map-selector button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    loadMap(btn.dataset.map);
+  });
+});
