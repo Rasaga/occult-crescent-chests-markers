@@ -2,7 +2,7 @@
 // CONFIGURACIÓN COFRES
 // ==========================
 const maxCoord = 42;
-const treasureData = [
+const bronzeChestsData = [
   { id: 't1', x: 4.0, y: 7.3 }, { id: 't2', x: 6.3, y: 6.4 },
   { id: 't3', x: 9.2, y: 3.6 }, { id: 't4', x: 7.7, y: 9.3 },
   { id: 't5', x: 11.9, y: 5.4 }, { id: 't6', x: 11.1, y: 10.3 },
@@ -35,7 +35,40 @@ const treasureData = [
   { id: 't59', x: 28.0, y: 15.2 }, { id: 't60', x: 28.7, y: 11.9 }
 ];
 
-const saved = JSON.parse(localStorage.getItem('treasures')) || {};
+const silverChestsData = [
+  { id: 's1', x: 4.3, y: 4.2 }, { id: 's2', x: 5.0, y: 14.7 },
+  { id: 's3', x: 7.5, y: 17.2 }, { id: 's4', x: 7.8, y: 35.2 },
+  { id: 's5', x: 15.4, y: 28.5 }, { id: 's6', x: 35.2, y: 33.5 },
+  { id: 's7', x: 31.5, y: 25.6 }, { id: 's8', x: 36.0, y: 18.0 },
+];
+
+const chestTypes = {
+  bronze: {
+    data: bronzeChestsData,
+    icon: 'assets/BronzeChest.png',
+    iconDone: 'assets/ChestDone.png'
+  },
+  silver: {
+    data: silverChestsData,
+    icon: 'assets/SilverChest.png',
+    iconDone: 'assets/ChestDone.png'
+  }
+};
+
+let saved = JSON.parse(localStorage.getItem('treasures')) || {
+  bronze: {},
+  silver: {}
+};
+
+// MIGRACIÓN AUTOMÁTICA
+if (!saved.bronze || !saved.silver) {
+  saved = {
+    bronze: saved.bronze || {},
+    silver: saved.silver || {}
+  };
+  localStorage.setItem('treasures', JSON.stringify(saved));
+}
+
 
 // ==========================
 // ELEMENTOS DEL DOM
@@ -77,9 +110,12 @@ const saveState = () => {
 const updateChestCounter = () => {
   const counter = $('chest-counter');
   if (!counter) return;
-
-  const total = treasureData.length;
-  const found = Object.values(saved).filter(Boolean).length;
+  let total = 0;
+  let found = 0;
+  Object.keys(chestTypes).forEach(type => {
+    total += chestTypes[type].data.length;
+    found += Object.values(saved[type]).filter(Boolean).length;
+  });
 
   counter.textContent = `${found} / ${total} chests found`;
 };
@@ -99,9 +135,9 @@ function updateTransform() {
 // ==========================
 // COFRES
 // ==========================
-function createTreasure({ x, y, id }) {
+function createTreasure(type, { x, y, id }) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'treasure-wrapper';
+  wrapper.className = `treasure-wrapper ${type}`;
 
   const mapWidth = mapImg.offsetWidth;
   const mapHeight = mapImg.offsetHeight;
@@ -110,11 +146,14 @@ function createTreasure({ x, y, id }) {
   wrapper.style.top = `${(y / maxCoord) * mapHeight}px`;
 
   const img = document.createElement('img');
-  img.className = 'treasure';
+  img.className = `treasure ${type}`;
   img.dataset.id = id;
-  img.src = saved[id] ? 'assets/BronzeChestDone.png' : 'assets/BronzeChest.png';
+  img.dataset.type = type;
 
-  if (saved[id]) img.classList.add('done');
+  const isDone = saved[type][id];
+
+  img.src = isDone ? chestTypes[type].iconDone : chestTypes[type].icon;
+  if (isDone) img.classList.add('done');
 
   img.addEventListener('click', () => toggleTreasure(img));
 
@@ -122,13 +161,18 @@ function createTreasure({ x, y, id }) {
   mapContainer.appendChild(wrapper);
 }
 
-function toggleTreasure(img) {
-  const isDone = img.classList.toggle('done');
-  img.src = isDone
-    ? 'assets/BronzeChestDone.png'
-    : 'assets/BronzeChest.png';
 
-  saved[img.dataset.id] = isDone;
+function toggleTreasure(img) {
+  const type = img.dataset.type;
+  const id = img.dataset.id;
+
+  const isDone = img.classList.toggle('done');
+
+  img.src = isDone
+    ? chestTypes[type].iconDone
+    : chestTypes[type].icon;
+
+  saved[type][id] = isDone;
   localStorage.setItem('treasures', JSON.stringify(saved));
   updateChestCounter();
 }
@@ -139,7 +183,10 @@ function toggleTreasure(img) {
 function initMap() {
   mapImg.draggable = false;
 
-  treasureData.forEach(createTreasure);
+  Object.keys(chestTypes).forEach(type => {
+    chestTypes[type].data.forEach(chest => createTreasure(type, chest));
+  });
+
   updateChestCounter();
 
   mapContainer.addEventListener('mousemove', e => {
@@ -256,34 +303,82 @@ mapImg.addEventListener('load', () => {
 });
 
 function setupButtons() {
+  const toggleBronze = $('toggle-bronze');
+  const toggleSilver = $('toggle-silver');
   const toggleVisibilityBtn = $('toggle-visibility');
   const toggleVisitedBtn = $('toggle-visited');
 
-  let chestsVisible = true;
+  // Si los botones no existen, no hacemos nada
+  if (!toggleBronze || !toggleSilver || !toggleVisibilityBtn || !toggleVisitedBtn) {
+    console.warn("Alguno de los botones no existe en el DOM");
+    return;
+  }
+
+  let bronzeVisible = true;
+  let silverVisible = true;
+  let allVisible = true;
+
+  // -------------------------
+  // BOTONES POR TIPO
+  // -------------------------
+
+  toggleBronze.addEventListener('click', () => {
+    bronzeVisible = !bronzeVisible;
+
+    document.querySelectorAll('.treasure-wrapper.bronze')
+      .forEach(w => w.style.display = bronzeVisible ? 'block' : 'none');
+
+    toggleBronze.textContent = bronzeVisible
+      ? 'Hide bronze'
+      : 'Show bronze';
+  });
+
+  toggleSilver.addEventListener('click', () => {
+    silverVisible = !silverVisible;
+
+    document.querySelectorAll('.treasure-wrapper.silver')
+      .forEach(w => w.style.display = silverVisible ? 'block' : 'none');
+
+    toggleSilver.textContent = silverVisible
+      ? 'Hide silver'
+      : 'Show silver';
+  });
+
+  // -------------------------
+  // BOTÓN GLOBAL: HIDE ALL
+  // -------------------------
 
   toggleVisibilityBtn.addEventListener('click', () => {
-    chestsVisible = !chestsVisible;
+    allVisible = !allVisible;
 
     document.querySelectorAll('.treasure-wrapper')
-      .forEach(w => w.style.display = chestsVisible ? 'block' : 'none');
+      .forEach(w => w.style.display = allVisible ? 'block' : 'none');
 
-    toggleVisibilityBtn.textContent = chestsVisible
-      ? 'Hide chests'
-      : 'Show chests';
+    toggleVisibilityBtn.textContent = allVisible
+      ? 'Hide all chests'
+      : 'Show all chests';
   });
+
+  // -------------------------
+  // BOTÓN GLOBAL: MARK ALL VISITED
+  // -------------------------
 
   toggleVisitedBtn.addEventListener('click', () => {
     const treasures = [...document.querySelectorAll('.treasure')];
     const allVisited = treasures.every(t => t.classList.contains('done'));
 
     treasures.forEach(t => {
+      const type = t.dataset.type;
+      const id = t.dataset.id;
+
       const done = !allVisited;
       t.classList.toggle('done', done);
-      t.src = done
-        ? 'assets/BronzeChestDone.png'
-        : 'assets/BronzeChest.png';
 
-      saved[t.dataset.id] = done;
+      t.src = done
+        ? chestTypes[type].iconDone
+        : chestTypes[type].icon;
+
+      saved[type][id] = done;
     });
 
     localStorage.setItem('treasures', JSON.stringify(saved));
@@ -293,4 +388,7 @@ function setupButtons() {
       ? 'Mark all as visited'
       : 'Mark all as not visited';
   });
+
 }
+
+
